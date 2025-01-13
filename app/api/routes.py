@@ -1,86 +1,106 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Path
-from typing import Optional, Literal
+# app/api/routes.py
+from fastapi import APIRouter, HTTPException
 import logging
-from app.models.v1 import (
-    SearchResponseV1,
-    DownloadResponseV1,
-    SearchParams,
-    DownloadRequestV1
-)
+from app.models.v1 import DownloadRequestV1, DownloadResponseV1, SearchResponseV1
 from app.services.opensubtitles import OpenSubtitlesAPI
-from app.services.bsplayer import BSPlayerAPI
-from app.api.dependencies import get_api_key
 
-router = APIRouter(prefix="/api/v1")
+# Configuración del logger
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def get_subtitle_service(provider: str, api_key: str):
-    """Factory function to get the appropriate subtitle service"""
-    providers = {
-        "opensubtitles": OpenSubtitlesAPI,
-        "bsplayer": BSPlayerAPI
-    }
-    
-    if provider not in providers:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Invalid provider. Available providers: {', '.join(providers.keys())}"
-        )
-    
-    return providers[provider](api_key)
+# Router para la API de OpenSubtitles
+router = APIRouter()
 
-@router.get("/subtitles/search", response_model=SearchResponseV1)
-async def search_subtitles(
-    provider: str = Query(..., description="Subtitle provider (opensubtitles or bsplayer)"),
-    query: Optional[str] = None,
-    imdb_id: Optional[int] = None,
-    languages: str = Query(..., description="Comma separated language codes"),
-    type: Optional[str] = None,
-    year: Optional[int] = None,
-    season_number: Optional[int] = None,
-    episode_number: Optional[int] = None,
-    page: Optional[int] = 1,
-    api_key: str = Depends(get_api_key)
-):
+@router.get("/api/v1/subtitles", response_model=SearchResponseV1)
+async def search_subtitles(imdb_id: str):
     """
-    Search for subtitles using various parameters.
+    Busca subtítulos usando la API de OpenSubtitles usando solo IMDB ID
     """
     try:
-        params = SearchParams(
-            query=query,
-            imdb_id=imdb_id,
-            languages=languages,
-            type=type,
-            year=year,
-            season_number=season_number,
-            episode_number=episode_number,
-            page=page
-        )
+        # Inicializar el cliente de API
+        client = OpenSubtitlesAPI()
+
+        # Realizar la búsqueda
+        response = await client.search_subtitles(imdb_id)
         
-        api = get_subtitle_service(provider, api_key)
-        return await api.search_subtitles(params)
-    
-    except ValueError as e:
-        logger.error(f"Validation error: {str(e)}")
-        raise HTTPException(status_code=422, detail=str(e))
+        # Convertir la respuesta al modelo SearchResponseV1
+        return SearchResponseV1(
+            data=response.get('data', []),
+            total_count=response.get('total_count', 0),
+            total_pages=response.get('total_pages', 1),
+            page=response.get('page', 1)
+        )
+
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        logger.error(f"Search error: {str(e)}")
+        logger.error(f"Error inesperado durante la búsqueda de subtítulos: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"An error occurred while searching subtitles: {str(e)}"
+            detail=f"Error inesperado durante la búsqueda de subtítulos: {str(e)}"
         )
 
-@router.post("/subtitles/download", response_model=DownloadResponseV1)
-async def download_subtitle(
-    download_request: DownloadRequestV1,
-    api_key: str = Depends(get_api_key)
-):
+@router.get("/api/v1/subtitles/languages")
+async def get_languages():
     """
-    Download a specific subtitle file.
+    Obtiene la lista de idiomas soportados
     """
     try:
-        api = OpenSubtitlesAPI(api_key)
-        return await api.download_subtitle(download_request)
+        client = OpenSubtitlesAPI()
+        return await client.languages()
     except Exception as e:
-        logger.error(f"Download error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error obteniendo idiomas: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error obteniendo idiomas: {str(e)}"
+        )
+
+@router.get("/api/v1/subtitles/formats")
+async def get_formats():
+    """
+    Obtiene la lista de formatos soportados
+    """
+    try:
+        client = OpenSubtitlesAPI()
+        return await client.formats()
+    except Exception as e:
+        logger.error(f"Error obteniendo formatos: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error obteniendo formatos: {str(e)}"
+        )
+
+@router.post("/api/v1/subtitles/download", response_model=DownloadResponseV1)
+async def download_subtitle(request: DownloadRequestV1):
+    """
+    Descarga un subtítulo usando su file_id
+    """
+    try:
+        # Inicializar el cliente de API
+        client = OpenSubtitlesAPI()
+
+        # Realizar la petición de descarga
+        response = await client.download_subtitle(
+            file_id=request.file_id,
+            sub_format=request.sub_format
+        )
+        
+        # Convertir la respuesta al modelo DownloadResponseV1
+        return DownloadResponseV1(
+            link=response.get('link', ''),
+            file_name=response.get('file_name', ''),
+            requests=response.get('requests', 0),
+            remaining=response.get('remaining', 0),
+            message=response.get('message', ''),
+            reset_time=response.get('reset_time', ''),
+            reset_time_utc=response.get('reset_time_utc', '')
+        )
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error inesperado durante la descarga del subtítulo: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error inesperado durante la descarga del subtítulo: {str(e)}"
+        )

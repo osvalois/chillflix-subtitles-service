@@ -2,52 +2,59 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 
 class UploaderInfo(BaseModel):
-    uploader_id: int
-    name: str
-    rank: str
+    uploader_id: Optional[int] = None  # Hacemos el campo opcional
+    name: Optional[str] = None         # También hacemos el nombre opcional
+    rank: Optional[str] = None         # Y el rank
 
 class FeatureDetails(BaseModel):
-    feature_id: int
-    feature_type: str
-    year: int
-    title: str
-    movie_name: str
-    imdb_id: int
-    tmdb_id: int
+    feature_id: Optional[int] = None
+    feature_type: Optional[str] = None
+    year: Optional[int] = None
+    title: Optional[str] = None
+    movie_name: Optional[str] = None
+    imdb_id: Optional[int] = None
+    tmdb_id: Optional[int] = None
 
 class SubtitleFile(BaseModel):
     file_id: int
-    cd_number: int
+    cd_number: Optional[int] = 1
     file_name: str
 
 class SubtitleAttributes(BaseModel):
     subtitle_id: str
     language: str
-    download_count: int
-    new_download_count: int
-    hearing_impaired: bool
-    hd: bool
-    fps: float
-    votes: int
-    points: int
-    ratings: float
-    from_trusted: bool
-    foreign_parts_only: bool
-    ai_translated: bool
-    machine_translated: bool
-    upload_date: str
-    release: str
-    comments: str
-    legacy_subtitle_id: int
-    uploader: UploaderInfo
-    feature_details: FeatureDetails
-    url: str
-    files: List[SubtitleFile]
+    download_count: Optional[int] = 0
+    new_download_count: Optional[int] = 0
+    hearing_impaired: Optional[bool] = False
+    hd: Optional[bool] = False
+    fps: Optional[float] = 0.0
+    votes: Optional[int] = 0
+    points: Optional[int] = 0
+    ratings: Optional[float] = 0.0
+    from_trusted: Optional[bool] = False
+    foreign_parts_only: Optional[bool] = False
+    ai_translated: Optional[bool] = False
+    machine_translated: Optional[bool] = False
+    upload_date: Optional[str] = None
+    release: Optional[str] = None
+    comments: Optional[str] = ""
+    legacy_subtitle_id: Optional[int] = None
+    provider: Optional[str] = None
+    url: Optional[str] = None
+    uploader: Optional[UploaderInfo] = None
+    feature_details: Optional[FeatureDetails] = None
+    files: Optional[List[SubtitleFile]] = None
+
+    class Config:
+        extra = "allow"
 
 class SubtitleAPIV1(BaseModel):
     id: str
     type: str
     attributes: SubtitleAttributes
+
+    class Config:
+        extra = "allow"
 
 class SearchResponseV1(BaseModel):
     data: List[SubtitleAPIV1]
@@ -59,7 +66,7 @@ class DownloadRequestV1(BaseModel):
     file_id: int
     sub_format: Optional[str] = None
     file_name: Optional[str] = None
-    url: Optional[str] = None  # Added for Addic7ed support
+    url: Optional[str] = None
 
 class DownloadResponseV1(BaseModel):
     link: str
@@ -72,33 +79,17 @@ class DownloadResponseV1(BaseModel):
 
 class SearchParams(BaseModel):
     query: Optional[str] = None
-    imdb_id: Optional[int] = None
+    imdb_id: Optional[str] = None
     tmdb_id: Optional[int] = None
-    type: Optional[str] = Field(None, description="movie or episode")
+    type: Optional[str] = None
     year: Optional[int] = None
-    languages: str = Field(..., description="Comma separated language codes (e.g., eng,spa)")
+    languages: Optional[str] = None
     season_number: Optional[int] = None
     episode_number: Optional[int] = None
-    parent_imdb_id: Optional[int] = None
+    parent_imdb_id: Optional[str] = None
     parent_tmdb_id: Optional[int] = None
     page: Optional[int] = 1
-
+    
     def dict(self, *args, **kwargs):
-        # Sobreescribimos el método dict para asegurar que los valores sean del tipo correcto
         d = super().dict(*args, **kwargs)
-        # Filtrar None y convertir valores booleanos a strings
-        return {k: str(v) if isinstance(v, bool) else v 
-                for k, v in d.items() 
-                if v is not None}
-    query: Optional[str] = None
-    imdb_id: Optional[int] = None
-    tmdb_id: Optional[int] = None
-    type: Optional[str] = Field(None, description="movie or episode")
-    year: Optional[int] = None
-    languages: str = Field(..., description="Comma separated language codes (e.g., eng,spa)")
-    season_number: Optional[int] = None
-    episode_number: Optional[int] = None
-    parent_imdb_id: Optional[int] = None
-    parent_tmdb_id: Optional[int] = None
-    query_by_title: Optional[bool] = False
-    page: Optional[int] = 1
+        return {k: v for k, v in d.items() if v is not None}
