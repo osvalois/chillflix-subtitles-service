@@ -5,6 +5,7 @@ from typing import Optional
 from app.models.v1 import DownloadRequestV1, DownloadResponseV1, SearchResponseV1
 from app.services.opensubtitles import OpenSubtitlesAPI
 from app.services.subdl import SubDLAPI
+from app.services.subsource import SubSourceAPI
 
 # Configuración del logger
 logging.basicConfig(level=logging.INFO)
@@ -16,13 +17,14 @@ router = APIRouter()
 # Mapa de proveedores de subtítulos
 subtitle_providers = {
     "opensubtitles": OpenSubtitlesAPI,
-    "subdl": lambda: SubDLAPI("_fwrdNVkOW19Ni1xuYG_mfghv45o_Key")
+    "subdl": lambda: SubDLAPI("_fwrdNVkOW19Ni1xuYG_mfghv45o_Key"),
+    "subsource": lambda: SubSourceAPI()
 }
 
 @router.get("/api/v1/subtitles", response_model=SearchResponseV1)
 async def search_subtitles(
     imdb_id: str,
-    provider: str = Query("opensubtitles", enum=["opensubtitles", "subdl"]),
+    provider: str = Query("opensubtitles", enum=["opensubtitles", "subdl", "subsource"]),
     type: Optional[str] = Query("movie", enum=["movie", "tv"]),
     languages: Optional[str] = "en",
     season_number: Optional[int] = None,
@@ -38,7 +40,16 @@ async def search_subtitles(
         # Realizar la búsqueda según el proveedor
         if provider == "opensubtitles":
             response = await client.search_subtitles(imdb_id)
-        else:
+        elif provider == "subsource":
+            response = await client.search_subtitles(
+                imdb_id=imdb_id,
+                type=type,
+                languages=languages,
+                season_number=season_number,
+                episode_number=episode_number,
+                with_imdb=True
+            )
+        else:  # subdl
             response = await client.search_subtitles(
                 imdb_id=imdb_id,
                 type=type,
@@ -66,7 +77,7 @@ async def search_subtitles(
 
 @router.get("/api/v1/subtitles/languages")
 async def get_languages(
-    provider: str = Query("opensubtitles", enum=["opensubtitles", "subdl"])
+    provider: str = Query("opensubtitles", enum=["opensubtitles", "subdl", "subsource"])
 ):
     """
     Obtiene la lista de idiomas soportados por el proveedor
@@ -83,7 +94,7 @@ async def get_languages(
 
 @router.get("/api/v1/subtitles/formats")
 async def get_formats(
-    provider: str = Query("opensubtitles", enum=["opensubtitles", "subdl"])
+    provider: str = Query("opensubtitles", enum=["opensubtitles", "subdl", "subsource"])
 ):
     """
     Obtiene la lista de formatos soportados por el proveedor
@@ -104,12 +115,20 @@ async def download_subtitle(request: DownloadRequestV1):
     Descarga un subtítulo usando su file_id o URL según el proveedor
     """
     try:
-        # Determinar el proveedor basado en la presencia de url o file_id
-        provider = "subdl" if request.url else "opensubtitles"
+        # Determinar el proveedor basado en la estructura de la solicitud
+        if request.url and "subsource" in request.url:
+            provider = "subsource"
+        elif request.url:
+            provider = "subdl"
+        else:
+            provider = "opensubtitles"
+
         client = subtitle_providers[provider]()
 
         # Realizar la petición de descarga según el proveedor
-        if provider == "subdl":
+        if provider == "subsource":
+            response = await client.download_subtitle(request.url, request.full_link)
+        elif provider == "subdl":
             response = await client.download_subtitle(request.url)
         else:
             response = await client.download_subtitle(

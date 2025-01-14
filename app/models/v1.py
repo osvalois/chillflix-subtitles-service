@@ -63,10 +63,10 @@ class SearchResponseV1(BaseModel):
     page: int
 
 class DownloadRequestV1(BaseModel):
-    file_id: int
+    file_id: Optional[int] = None
     sub_format: Optional[str] = None
-    file_name: Optional[str] = None
     url: Optional[str] = None
+    full_link: Optional[str] = None  # Necesario para SubSource
 
 class DownloadResponseV1(BaseModel):
     link: str
