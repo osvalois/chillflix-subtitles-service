@@ -1,27 +1,51 @@
 # app/api/routes.py
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 import logging
+from typing import Optional
 from app.models.v1 import DownloadRequestV1, DownloadResponseV1, SearchResponseV1
 from app.services.opensubtitles import OpenSubtitlesAPI
+from app.services.subdl import SubDLAPI
 
 # Configuración del logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Router para la API de OpenSubtitles
+# Router para la API de subtítulos
 router = APIRouter()
 
+# Mapa de proveedores de subtítulos
+subtitle_providers = {
+    "opensubtitles": OpenSubtitlesAPI,
+    "subdl": lambda: SubDLAPI("_fwrdNVkOW19Ni1xuYG_mfghv45o_Key")
+}
+
 @router.get("/api/v1/subtitles", response_model=SearchResponseV1)
-async def search_subtitles(imdb_id: str):
+async def search_subtitles(
+    imdb_id: str,
+    provider: str = Query("opensubtitles", enum=["opensubtitles", "subdl"]),
+    type: Optional[str] = Query("movie", enum=["movie", "tv"]),
+    languages: Optional[str] = "en",
+    season_number: Optional[int] = None,
+    episode_number: Optional[int] = None
+):
     """
-    Busca subtítulos usando la API de OpenSubtitles usando solo IMDB ID
+    Busca subtítulos usando la API del proveedor especificado
     """
     try:
-        # Inicializar el cliente de API
-        client = OpenSubtitlesAPI()
+        # Inicializar el cliente del proveedor seleccionado
+        client = subtitle_providers[provider]()
 
-        # Realizar la búsqueda
-        response = await client.search_subtitles(imdb_id)
+        # Realizar la búsqueda según el proveedor
+        if provider == "opensubtitles":
+            response = await client.search_subtitles(imdb_id)
+        else:
+            response = await client.search_subtitles(
+                imdb_id=imdb_id,
+                type=type,
+                languages=languages,
+                season_number=season_number,
+                episode_number=episode_number
+            )
         
         # Convertir la respuesta al modelo SearchResponseV1
         return SearchResponseV1(
@@ -41,12 +65,14 @@ async def search_subtitles(imdb_id: str):
         )
 
 @router.get("/api/v1/subtitles/languages")
-async def get_languages():
+async def get_languages(
+    provider: str = Query("opensubtitles", enum=["opensubtitles", "subdl"])
+):
     """
-    Obtiene la lista de idiomas soportados
+    Obtiene la lista de idiomas soportados por el proveedor
     """
     try:
-        client = OpenSubtitlesAPI()
+        client = subtitle_providers[provider]()
         return await client.languages()
     except Exception as e:
         logger.error(f"Error obteniendo idiomas: {str(e)}", exc_info=True)
@@ -56,12 +82,14 @@ async def get_languages():
         )
 
 @router.get("/api/v1/subtitles/formats")
-async def get_formats():
+async def get_formats(
+    provider: str = Query("opensubtitles", enum=["opensubtitles", "subdl"])
+):
     """
-    Obtiene la lista de formatos soportados
+    Obtiene la lista de formatos soportados por el proveedor
     """
     try:
-        client = OpenSubtitlesAPI()
+        client = subtitle_providers[provider]()
         return await client.formats()
     except Exception as e:
         logger.error(f"Error obteniendo formatos: {str(e)}", exc_info=True)
@@ -73,17 +101,21 @@ async def get_formats():
 @router.post("/api/v1/subtitles/download", response_model=DownloadResponseV1)
 async def download_subtitle(request: DownloadRequestV1):
     """
-    Descarga un subtítulo usando su file_id
+    Descarga un subtítulo usando su file_id o URL según el proveedor
     """
     try:
-        # Inicializar el cliente de API
-        client = OpenSubtitlesAPI()
+        # Determinar el proveedor basado en la presencia de url o file_id
+        provider = "subdl" if request.url else "opensubtitles"
+        client = subtitle_providers[provider]()
 
-        # Realizar la petición de descarga
-        response = await client.download_subtitle(
-            file_id=request.file_id,
-            sub_format=request.sub_format
-        )
+        # Realizar la petición de descarga según el proveedor
+        if provider == "subdl":
+            response = await client.download_subtitle(request.url)
+        else:
+            response = await client.download_subtitle(
+                file_id=request.file_id,
+                sub_format=request.sub_format
+            )
         
         # Convertir la respuesta al modelo DownloadResponseV1
         return DownloadResponseV1(
