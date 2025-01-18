@@ -46,8 +46,7 @@ async def search_subtitles(
                 type=type,
                 languages=languages,
                 season_number=season_number,
-                episode_number=episode_number,
-                with_imdb=True
+                episode_number=episode_number
             )
         else:  # subdl
             response = await client.search_subtitles(
@@ -115,11 +114,13 @@ async def download_subtitle(request: DownloadRequestV1):
     Descarga un subtítulo usando su file_id o URL según el proveedor
     """
     try:
+        provider = None
         # Determinar el proveedor basado en la estructura de la solicitud
-        if request.url and "subsource" in request.url:
-            provider = "subsource"
-        elif request.url:
-            provider = "subdl"
+        if request.url:
+            if "subsource" in request.url:
+                provider = "subsource"
+            else:
+                provider = "subdl"
         else:
             provider = "opensubtitles"
 
@@ -127,10 +128,10 @@ async def download_subtitle(request: DownloadRequestV1):
 
         # Realizar la petición de descarga según el proveedor
         if provider == "subsource":
-            response = await client.download_subtitle(request.url, request.full_link)
+            response = await client.download_subtitle(request.url)
         elif provider == "subdl":
             response = await client.download_subtitle(request.url)
-        else:
+        else:  # opensubtitles
             response = await client.download_subtitle(
                 file_id=request.file_id,
                 sub_format=request.sub_format
