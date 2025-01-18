@@ -156,3 +156,4 @@ async def download_subtitle(request: DownloadRequestV1):
             status_code=500,
             detail=f"Error inesperado durante la descarga del subtítulo: {str(e)}"
         )
+    
