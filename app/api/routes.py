@@ -1,6 +1,5 @@
 # app/api/routes.py
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
 import logging
 from typing import Optional
 from app.models.v1 import DownloadRequestV1, DownloadResponseV1, SearchResponseV1
@@ -14,21 +13,6 @@ logger = logging.getLogger(__name__)
 
 # Router para la API de subtítulos
 router = APIRouter()
-
-# Configuración de CORS
-origins = [
-    "http://localhost:5173/movie/346",
-    "https://chillflix.win"
-]
-
-# Agregar middleware de CORS al router
-router.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Mapa de proveedores de subtítulos
 subtitle_providers = {

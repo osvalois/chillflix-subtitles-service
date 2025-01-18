@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.api.routes import router
 from app.config import get_settings
@@ -14,6 +15,21 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     debug=settings.debug
+)
+
+# Configuración de CORS
+origins = [
+    "http://localhost:5173",
+    "https://chillflix.win"
+]
+
+# Agregar middleware de CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include routers
