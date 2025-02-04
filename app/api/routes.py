@@ -57,9 +57,46 @@ async def search_subtitles(
                 episode_number=episode_number
             )
         
+        # Validar y limpiar los datos antes de crear el SearchResponseV1
+        data = response.get('data', [])
+        cleaned_data = []
+        
+        for item in data:
+            if isinstance(item, dict):
+                # Asegurar que existe la estructura básica
+                if 'attributes' not in item:
+                    item['attributes'] = {}
+                if 'id' not in item:
+                    item['id'] = str(item.get('attributes', {}).get('subtitle_id', ''))
+                if 'type' not in item:
+                    item['type'] = 'subtitle'
+                
+                # Limpiar y asegurar tipos de datos correctos
+                attrs = item['attributes']
+                if 'language' in attrs and attrs['language'] is None:
+                    attrs['language'] = ''
+                if 'subtitle_id' in attrs and attrs['subtitle_id'] is None:
+                    attrs['subtitle_id'] = ''
+                if 'files' in attrs and attrs['files'] is None:
+                    attrs['files'] = []
+                
+                # Asegurar que los archivos tienen la estructura correcta
+                if 'files' in attrs and isinstance(attrs['files'], list):
+                    cleaned_files = []
+                    for file in attrs['files']:
+                        if isinstance(file, dict):
+                            if 'file_name' not in file or file['file_name'] is None:
+                                file['file_name'] = ''
+                            if 'file_id' not in file or file['file_id'] is None:
+                                file['file_id'] = 0
+                            cleaned_files.append(file)
+                    attrs['files'] = cleaned_files
+
+                cleaned_data.append(item)
+
         # Convertir la respuesta al modelo SearchResponseV1
         return SearchResponseV1(
-            data=response.get('data', []),
+            data=cleaned_data,
             total_count=response.get('total_count', 0),
             total_pages=response.get('total_pages', 1),
             page=response.get('page', 1)
@@ -73,7 +110,6 @@ async def search_subtitles(
             status_code=500,
             detail=f"Error inesperado durante la búsqueda de subtítulos: {str(e)}"
         )
-
 @router.get("/api/v1/subtitles/languages")
 async def get_languages(
     provider: str = Query("opensubtitles", enum=["opensubtitles", "subdl", "subsource"])
